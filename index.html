@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Predict a signal (433 mhz) for Athom Homey</title>
+    <title>Predict a RF signal for Athom Homey</title>
     <style type="text/css">
 
         * {
@@ -24,7 +24,6 @@
         }
 
         .section {
-            /*border: 1px solid #ccc;*/
             box-shadow: 0 2px 2px 0 rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.08);
             border-radius: 4px;
             padding: 13px;
@@ -39,10 +38,18 @@
             display: block;
         }
 
-        .row > input {
-            width: 98%;
+        input[type=text], input[type=number], select {
             margin: 2px 0 7px 0;
             padding: 5px;
+            width: 100px
+        }
+
+        #record-time {
+            width: 50px;
+        }
+
+        .row > input {
+            width: 98%;
         }
 
         input[type='button'] {
@@ -95,9 +102,10 @@
     </style>
     <script type="text/javascript">
 
-        // helper
+        // fetch element helper
         function $el(id) { return window.document.getElementById(id); }
 
+        // display formatted json helper
         function syntaxHighlight(json) {
             if (typeof json != 'string') {
                 json = JSON.stringify(json, undefined, 2);
@@ -120,6 +128,9 @@
             });
         }
 
+        // params
+        const MAX_LENGTH = 4;
+
         // internal
         var _recording;
         var _calculating;
@@ -131,17 +142,23 @@
 
         // recording
         var $recordBtn;
+        var $frequencySelect;
+        var $recordTime;
         var $calculateBtn;
         var $recordData;
 
-        // input params
-        var $sofl;
-        var $eofl;
+        // prediction config
+        var $minSofl;
+        var $maxSofl;
+        var $minEofl;
+        var $maxEofl;
+        var $minWordLength;
+        var $maxWordLength;
+        var $maxWords;
+        var $tolerance;
         var $predictedSignalCount;
         var $predictedSignalLength;
-        var $predictedWordLength;
         var $predictedWords;
-        var $tolerance;
 
         // output
         var $output;
@@ -155,17 +172,23 @@
 
             // recording
             $recordBtn = $el('record-button');
-            $calculateBtn = $el('calculate-button');
+            $frequencySelect = $el('frequency-button');
+            $recordTime = $el('record-time');
+            //$calculateBtn = $el('calculate-button');
             $recordData = $el('record-data');
 
-            // input params
-            $sofl = $el('sofl');
-            $eofl = $el('eofl');
+            // prediction config
+            $minSofl = $el('min-sofl');
+            $maxSofl = $el('max-sofl');
+            $minEofl = $el('min-eofl');
+            $maxEofl = $el('max-eofl');
+            $minWordLength = $el('min-word-length');
+            $maxWordLength = $el('max-word-length');
+            $maxWords = $el('max-words');
+            $tolerance = $el('tolerance');
             $predictedSignalCount = $el('predicted-signal-count');
             $predictedSignalLength = $el('predicted-signal-length');
-            $predictedWordLength = $el('predicted-word-length');
             $predictedWords = $el('predicted-words');
-            $tolerance = $el('tolerance');
 
             // output
             $output = $el('output');
@@ -183,18 +206,24 @@
                 window.localStorage.setItem('access-token', $accessToken.value);
             };
             $recordBtn.onclick = () => record();
-            $calculateBtn.onclick = () => calculate($recordData);
+            //$calculateBtn.onclick = () => calculate($recordData);
             $recordData.oninput = () => {
                 window.localStorage.setItem('record-data', $recordData.value);
                 calculate($recordData);
             }
-            $sofl.oninput = () => calculate($sofl);
-            $eofl.oninput = () => calculate($eofl);
+
+            $minSofl.oninput = () => calculate($minSofl);
+            $maxSofl.oninput = () => calculate($maxSofl);
+            $minEofl.oninput = () => calculate($minEofl);
+            $maxEofl.oninput = () => calculate($maxEofl);
+            $minWordLength.oninput = () => calculate($minWordLength);
+            $maxWordLength.oninput = () => calculate($maxWordLength);
+            $maxWords.oninput = () => calculate($maxWords);
+            $tolerance.oninput = () => calculate($tolerance);
+
             $predictedSignalCount.oninput = () => calculate($predictedSignalCount);
             $predictedSignalLength.oninput = () => calculate($predictedSignalLength);
-            $predictedWordLength.oninput = () => calculate($predictedWordLength);
             $predictedWords.oninput = () => calculate($predictedWords);
-            $tolerance.oninput = () => calculate($tolerance);
 
             // load previous recorded signal
             var recordData = window.localStorage.getItem('record-data');
@@ -205,19 +234,14 @@
         }
 
         function clear() {
-            // TODO: Clear previous calculation
             this.displayError(undefined);
             this.displaySignal(undefined);
         }
 
         function setDefaultInputs() {
-            $sofl.value = '';
-            $eofl.value = '';
             $predictedSignalCount.value = '';
             $predictedSignalLength.value = '';
-            $predictedWordLength.value = '';
             $predictedWords.value = '';
-            $tolerance.value = '';
         }
 
         function api(method, url, data, callback) {
@@ -230,7 +254,7 @@
 
                 var xhttp = new XMLHttpRequest();
                 xhttp.open("POST", 'http://' + $ipAddress.value + '/api' + url, true);
-                xhttp.setRequestHeader("Content-type", "application/json");
+                xhttp.setRequestHeader("Content-type", "application/json;charset=UTF-8");
                 xhttp.setRequestHeader("Authorization", "Bearer " + $accessToken.value);
                 xhttp.onreadystatechange = function (e) {
                     if (callback && this.readyState == 4) {
@@ -244,7 +268,7 @@
                         }
                     }
                 };
-                xhttp.send();
+                xhttp.send(JSON.stringify(data));
             } catch (e) {
                 if (callback)
                     callback('Api request faild: Please check the provided ip-address for your Homey. \nERROR: ' + e.message, null);
@@ -257,17 +281,24 @@
 
         function record() {
             console.log('start recording');
-            
+
+            // reset
             setDefaultInputs();
             $output.innerHTML = '';
             $payloads.innerHTML = '';
 
+            // state
             _recording = true;
             updateRecordingButton();
 
-            $recordData.value = 'Recording for 10 sec...Please be patience & send your signal multiple times (press button on remote)';
+            // start recording
+            var data = {
+                frequency: $frequencySelect.value,
+                time: Math.min(60, Math.max(1, parseInt($recordTime.value || 10))) // 1-60 sec.
+            };
+            $recordData.value = 'Recording for ' + data.time + ' sec...Please be patience & send your signal multiple times (i.e. press button on remote)';
             $recordData.disabled = true;
-            api('POST', '/manager/rf/record', {}, (err, result) => {
+            api('POST', '/manager/rf/record', data, (err, result) => {
                 console.log('done recording');
 
                 _recording = false;
@@ -295,6 +326,7 @@
             if (_recording || _calculating)
                 return;
 
+            // new recording data?
             if (trigger == $recordData)
                 setDefaultInputs();
 
@@ -302,77 +334,112 @@
                 _calculating = true;
                 clearError();
 
+                // parse recording data?
                 if (!recordData) {
-                    var recordInput = ($recordData.value || '').trim();
+                    var recordInput = ($recordData.value || '').replace(/[^0-9,\[\]]/g, "");
                     if (!recordInput)
                         return;
 
                     recordData = JSON.parse(recordInput);
                 }
 
-                if (!Array.isArray(recordData))
+                if (!Array.isArray(recordData) || !recordData.length)
                     throw Error("No valid record data provided");
 
-                // input data
-                var sofl = $sofl.value ? parseInt($sofl.value) : 1; // TODO: Auto try multiple sofl values & compare the results
-                var eofl = $eofl.value ? parseInt($eofl.value) : 0; // TODO: Auto try multiple sofl values & compare the results
-                var predictedSignalCount = $predictedSignalCount.value ? parseInt($predictedSignalCount.value) : 0;
-                var predictedSignalLength = trigger == $predictedSignalCount ? 0 : $predictedSignalLength.value ? parseInt($predictedSignalLength.value) : 0;
-                var predictedWordLength = $predictedWordLength.value ? parseInt($predictedWordLength.value) : 2;
-                var predictedWords = trigger != $predictedWordLength && $predictedWords.value && $predictedWords.value[0] === '[' ? JSON.parse($predictedWords.value) : null;
-                var tolerance = $tolerance.value ? parseInt($tolerance.value) : 100;
+                // manual overrides?
+                var predictedSignalCount = trigger == $recordData ? 0 : parseInt($predictedSignalCount.value | 0);
+                var predictedSignalLength = trigger == $recordData || trigger == $predictedSignalCount ? 0 : parseInt($predictedSignalLength.value | 0);
+                var predictedWordsInput = $predictedWords.value ? $predictedWords.value.replace(/[^0-9,\[\]]/g, "") : null;
+                var predictedWords = trigger == $recordData || !predictedWordsInput || !predictedWordsInput[0] === '[' ? null : JSON.parse(predictedWordsInput);
 
-                if (predictedWordLength < 1 || predictedWordLength > 100) {
-                    trigger = $predictedWordLength;
-                    throw Error("Invalid word length: try 2-6");
+                // prediction config
+                var minSofl = parseInt($minSofl.value || 0);
+                var maxSofl = parseInt($maxSofl.value || MAX_LENGTH);
+                var minEofl = parseInt($minEofl.value || 0);
+                var maxEofl = parseInt($maxEofl.value || MAX_LENGTH);
+                var minWordLength = (predictedWords || []).length || parseInt($minWordLength.value || 2);
+                var maxWordLength = (predictedWords || []).length || parseInt($maxWordLength.value || MAX_LENGTH);
+                var maxWords = parseInt($maxWords.value || Number.MAX_SAFE_INTEGER);
+                var tolerance = parseInt($tolerance.value || 100);
+
+                // validate input
+                if (minSofl < 0) {
+                    trigger = $minSofl;
+                    throw Error("Invalid min start of frame length (sof)");
                 }
-
+                if (maxSofl < 0) {
+                    trigger = $maxSofl;
+                    throw Error("Invalid max start of frame length (sof)");
+                }
+                if (minEofl < 0) {
+                    trigger = $minEofl;
+                    throw Error("Invalid min end of frame length (eof)");
+                }
+                if (maxEofl < 0 || maxEofl < minEofl) {
+                    trigger = $maxEofl;
+                    throw Error("Invalid max start of frame length (eof)");
+                }
+                if (minWordLength < 1) {
+                    trigger = $minWordLength;
+                    throw Error("Invalid min word length");
+                }
+                if (maxWordLength < 1 || maxWordLength < minWordLength) {
+                    trigger = $maxWordLength;
+                    throw Error("Invalid max word length");
+                }
+                if (maxWords < 1) {
+                    trigger = $maxWords;
+                    throw Error("Invalid max words");
+                }
+                
                 // calculate
-                var result; // Note: best result
                 var results = [];
-                if (trigger == $recordData) {
-                    for (predictedWordLength = 2; predictedWordLength <= 6; predictedWordLength++) {
-                        for (eofl = 0; eofl <= predictedWordLength; eofl++) {
-                            for (sofl = 0; sofl <= predictedWordLength; sofl++) {
-                                var current = signalDef(recordData, sofl, eofl, predictedSignalCount, predictedSignalLength, predictedWordLength, predictedWords, tolerance);
-                                current.payloads = analyze(current);
-                                if (current.payloads && current.payloads.match) {
-                                    results.push(current);
-                                }
+                for (var predictedWordLength = minWordLength; predictedWordLength <= maxWordLength; predictedWordLength++) {
+                    for (var sofl = minSofl; sofl <= maxSofl; sofl++) {
+                        for (var eofl = minEofl; eofl <= maxEofl; eofl++) {
+                            if (sofl == 0 || eofl == 0) {
 
-                                if (!result || (current.payloads && current.payloads.match > result.payloads.match)) {
-                                    result = current; // TODO: also override if contains ? (or reduce match %)
-                                }
-                                if (result.payloads.guess.indexOf('?') !== -1 && current.payloads.guess.indexOf('?') === -1) {
-                                    result = current;
+                                // predict signal defenition
+                                var current = signalDef(recordData, sofl, eofl, predictedSignalCount, predictedSignalLength, predictedWordLength, predictedWords, tolerance, maxWords);
+                                if (current) {
+                                    // analyze defenition
+                                    current.payloads = analyze(current);
+
+                                    // include in results?
+                                    if (current.payloads && current.payloads.match && current.payloads.score) {
+                                        results.push(current);
+                                    }
                                 }
                             }
                         }
                     }
-
-                } else {
-                    result = signalDef(recordData, sofl, eofl, predictedSignalCount, predictedSignalLength, predictedWordLength, predictedWords, tolerance);
-                    result.payloads = analyze(result);
-                    results.push(result);
                 }
+
+                // validate results
+                if (!results || !results.length) {
+                    trigger = $recordData;
+                    throw Error("No results");
+                }
+
+                // Order by score
+                results = results.sort((s1, s2) => s1.payloads.score < s2.payloads.score ? 1 : s1.payloads.score > s2.payloads.score ? -1 : 0);
 
                 // display
                 console.log(results);
+                console.log(results[0]);
 
-                // inputs
-                if (trigger != $sofl) $sofl.value = result.sofl;
-                if (trigger != $eofl) $eofl.value = result.eofl;
-                if (trigger != $predictedSignalCount) $predictedSignalCount.value = result.predictedSignalCount;
-                if (trigger != $predictedSignalLength) $predictedSignalLength.value = result.predictedSignalLength;
-                if (trigger != $predictedWordLength) $predictedWordLength.value = result.predictedWordLength;
-                if (trigger != $predictedWords) $predictedWords.value = JSON.stringify(result.predictedWords);
-                if (trigger != $tolerance) $tolerance.value = result.tolerance;
+                // display predicted values
+                if (trigger != $predictedSignalCount) $predictedSignalCount.value = results[0].predictedSignalCount;
+                if (trigger != $predictedSignalLength) $predictedSignalLength.value = results[0].predictedSignalLength;
+                //if (trigger != $predictedWords) $predictedWords.value = JSON.stringify(result.predictedWords);
 
                 // output
-                $output.innerHTML = syntaxHighlight(result.signal);
+                $output.innerHTML = '<strong>Signal: </strong>' + syntaxHighlight(results[0].signal)
+                    + '\n\n<strong>Output: </strong>' + results[0].payloads.guess
+                    + '\n<strong>Match: </strong> ' + Math.round(results[0].payloads.match * 100) + '%';
                 $output.style.outline = '1px solid #ccc';
 
-                displayPayloads(results, result);
+                displayPayloads(results);
             }
             catch (e) {
                 console.log(e);
@@ -401,10 +468,29 @@
             }
         }
 
-        function signalDef(recordData, sofl = 1, eofl = 0, predictedSignalCount = 0, predictedSignalLength = 0, predictedWordLength = 2, predictedWords = null, tolerance = 100) {
+        function calcDist(word1, word2, tolerance) {
+            if (!word1 || !word2 || word1.length != word2.length)
+                return -1;
+
+            if (!tolerance)
+                throw new Error('No tolerancve provided');
+
+            var dist = 0;
+            for (var i = 0; i < word1.length; i++) {
+                var d = Math.abs(word1[i] - word2[i]);
+                if (d > tolerance)  // no match?;
+                    return -1;      // skip
+                dist += d;
+            }
+            return dist;
+        }
+
+        // Generate signal def based on: https://github.com/athombv/node-homey-433/wiki/How-to-record-a-signal#defining-the-eof-end-of-frame
+        function signalDef(recordData, sofl = 1, eofl = 0, predictedSignalCount = 0, predictedSignalLength = 0, predictedWordLength = 2, predictedWords = null, tolerance = 100, maxWords = -1) {
+
+            // filter noise & select most common signal
             var counts = recordData.reduce((lengths, recordEntry) => Object.assign(lengths, { [recordEntry.length]: (lengths[recordEntry.length] || 0) + 1 }), {});
             var max = Object.keys(counts).reduce((max, key) => counts[key] > max.value ? { key: key, value: counts[key] } : max, { key: 0, value: 0 });
-
             var closest = max;
             if (predictedSignalLength) {
                 predictedSignalCount = counts[predictedSignalLength];
@@ -423,107 +509,173 @@
                     throw new Error('no signals found with a count of ' + predictedSignalCount + ', choose one of:\nsignal: { "lenght":count }\n' + JSON.stringify(counts, null, 2));
                 }
             }
-
             predictedSignalCount = predictedSignalCount || max.value;
             predictedSignalLength = parseInt(predictedSignalLength || closest.key);
 
             var signals = recordData.filter(recordEntry => recordEntry.length === predictedSignalLength);
 
-            var sof = signals.map(recordEntry => recordEntry.slice(0, sofl)).reduce((result, recordEntrySof) => recordEntrySof.map((timing, index) => (result[index] || 0) + timing)).map(timing => Math.round(timing / signals.length));
-            var eof = eofl === 0 ? [] : signals.map(recordEntry => recordEntry.slice(-1 * eofl)).reduce((result, recordEntryEof) => recordEntryEof.map((timing, index) => (result[index] || 0) + timing)).map(timing => Math.round(timing / signals.length));
+            // find sof & eof
+            var sof = signals
+                .map(recordEntry => recordEntry.slice(0, sofl))
+                .reduce((result, recordEntrySof) => recordEntrySof.map((timing, index) => (result[index] || 0) + timing))
+                .map(timing => Math.round(timing / signals.length));
 
+            var eof = eofl === 0 ? [] : signals
+                .map(recordEntry => recordEntry.slice(-1 * eofl))
+                .reduce((result, recordEntryEof) => recordEntryEof.map((timing, index) => (result[index] || 0) + timing))
+                .map(timing => Math.round(timing / signals.length));
+
+            // get prediction input
             predictedWordLength = predictedWords ? predictedWords[0].length : predictedWordLength;
             predictedSignal = signals[0];
+
+            // grab predicted words from the signal?
             if (!predictedWords) {
-                var word1 = [];
-                var word2 = [];
+
+                // Grab first signal matching sof
                 var sofLength = (sof || []).length;
                 var idx = sofLength ? signals.findIndex(signal => signal[0] > sof[0] - tolerance && signal[0] < sof[0] + tolerance) : -1;
                 predictedSignal = signals[idx === -1 ? 0 : idx];
 
-                for (var i = 0; i < predictedWordLength; i++) {
-                    word1[i] = predictedSignal[i + sofLength];
-                    word2[i] = predictedSignal[i + sofLength + predictedWordLength];
-                }
-                predictedWords = [word1, word2];
-            }
+                // Predict words
+                predictedWords = [];
+                for (var i = (sof || []).length; i < predictedSignal.length - (eof || []).length; i += predictedWordLength) {
+                    if (i + predictedWordLength <= predictedSignal.length) { // skip remaining bits
 
-            var words = [].concat.apply([], signals.map(recordEntry => recordEntry.slice(sofl, -1 * eofl || undefined))).reduce((result, measurement, index, arr) => { if (index % predictedWords[0].length === 0) { var wordIndex = predictedWords.findIndex(word => word.every((timing, timingIndex) => Math.abs(arr[index + timingIndex] - timing) < tolerance)); if (wordIndex !== -1) { result[wordIndex].push(arr.slice(index, index + predictedWords[0].length)); } } return result; }, new Array(predictedWords.length).fill(null).map(() => [])).map((word) => word.reduce((result, arr) => arr.map((timing, index) => result[index] + timing), new Array(predictedWords[0].length).fill(0)).map(timing => Math.round(timing / word.length)));
-            var length = Math.floor((predictedSignal.length - sofl - eofl) / predictedWordLength);
+                        // grab next signal part
+                        var part = predictedSignal.slice(i, i + predictedWordLength);
 
-            var signal = { sof, eof, words, length };
-            var debug = JSON.stringify(signal);
+                        // done if signal repeats, with a minimal of 2 predicted words
+                        if (predictedWords.length < 2 ? false : predictedWords.find(word => calcDist(part, word, tolerance) !== -1) !== undefined)
+                            break;
 
-            return { recordData, predictedSignalCount, predictedSignalLength, sofl, eofl, counts, max, closest, signals, sof, eof, predictedWordLength, predictedWords, predictedSignal, tolerance, words, length, signal, debug };
-        }
-
-        function analyze(result) {
-            var output = null;
-            if (result && result.signals && result.signals.length) {
-                output = {};
-                output.payloads = result.signals.map(signal => parseSignal(signal, result));
-                output.distinct = output.payloads.reduce((map, p) => { var key = p.join(''); map[key] = map[key] ? map[key] + 1 : 1; return map; }, {});
-                output.guess = Object.keys(output.distinct).filter(key => key.indexOf('?') === -1).reduce((guess, s) => output.distinct[s] > (guess.max || 0) ? { signal: s, max: output.distinct[s] } : guess, {}).signal;
-                if (!output.guess) {
-                    output.guess = Object.keys(output.distinct).reduce((guess, s) => output.distinct[s] > (guess.max || 0) ? { signal: s, max: output.distinct[s] } : guess, {}).signal;
-                }
-                output.matches = output.payloads.reduce((count, s) => count += s.indexOf('?') === -1 ? 1 : 0, 0);
-                output.misses = result.signals.length - output.matches;
-                output.match = (output.distinct[output.guess] || 0) / result.signals.length;
-                //output.match = output.matches / result.signals.length;
-            }
-            return output;
-        }
-
-        function parseSignal(signal, result) {
-            if (!Array.isArray(signal) || !result || !result.words || !result.words.length)
-                return null;
-
-            var word0 = result.words[0];
-            var word1 = result.words[1];
-
-            if (!word0 || !word1)
-                return null;
-
-            var payload = [];
-            var wordLength = word0.length;
-            let tolerance = result.tolerance * wordLength; // NOTE: Include wordLength or check each individual value against tolerance?
-            for (var i = result.sofl; i < signal.length - result.eofl; i += wordLength) {
-                if (i + wordLength <= signal.length) {
-                    var part = signal.slice(i, i + wordLength);
-                    var dist = part.reduce((d, s, idx) => { d[0] += Math.abs(s - word0[idx]); d[1] += Math.abs(s - word1[idx]); return d; }, [0, 0]);
-                    if (dist[0] < dist[1] && dist[0] <= result.tolerance) {
-                        payload.push(0);
-                    } else if (dist[1] <= result.tolerance) {
-                        payload.push(1);
-                    } else {
-                        payload.push('?');
+                        // add part to predicted words
+                        predictedWords.push(part);
                     }
                 }
             }
 
+            if (maxWords && (predictedWords || []).length > maxWords) {
+                predictedWords = predictedWords.slice(0, maxWords);
+            }
+
+            // find words
+            var words = [].concat
+                .apply([], signals.map(recordEntry => recordEntry.slice(sofl, -1 * eofl || undefined)))
+                .reduce((result, measurement, index, arr) => {
+                        if (index % predictedWords[0].length === 0) {
+                            var wordIndex = predictedWords.findIndex(word => word.every((timing, timingIndex) => Math.abs(arr[index + timingIndex] - timing) < tolerance));
+                            if (wordIndex !== -1) {
+                                result[wordIndex].push(arr.slice(index, index + predictedWords[0].length));
+                            }
+                        }
+                        return result;
+                    }, new Array(predictedWords.length).fill(null).map(() => [])
+                )
+                .map((word) => word
+                    .reduce((result, arr) => arr.map((timing, index) => result[index] + timing), new Array(predictedWords[0].length).fill(0))
+                    .map(timing => Math.round(timing / word.length)
+                ));
+
+            // skip invalid
+            if (!words || words.find(w => isNaN(w[0])))
+                return null;
+
+            // calc signal length
+            var length = Math.floor((predictedSignal.length - sofl - eofl) / predictedWordLength);
+
+            // define signal
+            var signal = { sof, eof, words, interval: 10000, sensitivity: 0.7, repetitions: 20, minimalLength: length, maximalLength: length };
+            return { recordData, predictedSignalCount, predictedSignalLength, sofl, eofl, counts, max, closest, signals, sof, eof, predictedWordLength, predictedWords, predictedSignal, tolerance, words, length, signal };
+        }
+
+        // Analyze prediction
+        function analyze(signalDef) {
+            var output = null;
+            if (signalDef && signalDef.signals && signalDef.signals.length) {
+                output = {};
+
+                // map signals to digital representation using the predicted signal config
+                output.payloads = signalDef.signals.map(signal => parseSignal(signal, signalDef));
+
+                // Find distinct payloads (digital outputs)
+                output.distinct = output.payloads.reduce((map, p) => { var key = p.join(''); map[key] = map[key] ? map[key] + 1 : 1; return map; }, {});
+
+                // Find most common payload (prever fully matched payloads above payloads with unknown bits [?])
+                output.guess = Object.keys(output.distinct).filter(key => key.indexOf('?') === -1).reduce((guess, s) => output.distinct[s] > (guess.max || 0) ? { signal: s, max: output.distinct[s] } : guess, {}).signal;
+                if (!output.guess) {
+                    output.guess = Object.keys(output.distinct).reduce((guess, s) => output.distinct[s] > (guess.max || 0) ? { signal: s, max: output.distinct[s] } : guess, {}).signal;
+                }
+
+                // stats
+                output.matches = output.payloads.reduce((count, s) => count += s.indexOf('?') === -1 ? 1 : 0, 0);
+                output.misses = signalDef.signals.length - output.matches;
+                output.payloadMatch = (output.guess.length - (output.guess.match(/\?/g) || []).length) / output.guess.length;
+                output.signalsMatch = (output.distinct[output.guess] || 0) / signalDef.signals.length;
+                output.match = .5 * (output.payloadMatch + output.signalsMatch);
+                output.score = (100 * output.payloadMatch)  // number of unknown parts
+                    + (100 * output.signalsMatch)           // number of signal machtes
+                    + (signalDef.sof.length ? Math.max(0, 30 - 3*signalDef.sof.length) : 0)       // prefer signals with small sof (> 0)
+                    + (signalDef.eof.length ? Math.max(0, 30 - 3*signalDef.sof.length) : 0)       // prefer signals with small eof (> 0)
+                    + Math.max(0, (200 - (20 * signalDef.words.length)))     // prefer less words
+                    + Math.max(0, (200 - (20 * signalDef.words[0].length))); // prefer shorter words
+            }
+            return output;
+        }
+
+        // parse signal payload (digital representation) using the provided signal defenition
+        function parseSignal(signal, signalDef) {
+            if (!Array.isArray(signal) || !signalDef || !signalDef.words || !signalDef.words.length)
+                return null;
+
+            var payload = [];
+            var wordLength = signalDef.words[0].length;
+            var tolerance = signalDef.tolerance || 100;
+            var wordIdx = 0;
+            for (var i = signalDef.sofl; i < signal.length - signalDef.eofl; i += wordLength) {
+                if (i + wordLength <= signal.length) { // skip remaining bits
+
+                    // grab next signal part
+                    var part = signal.slice(i, i + wordLength); 
+
+                    // find best matching word
+                    var word = signalDef.words.reduce((best, word, idx) => {
+                        var dist = calcDist(part, word, signalDef.tolerance);
+                        return dist === -1 ? best : best && best.dist <= dist ? best : { word, dist, idx };
+                    }, null);
+
+                    // add word idx to payload
+                    payload.push(word ? word.idx : '?');
+                }
+            }
             return payload;
         }
 
-        function displayPayloads(results, result) {
+        function displayPayloads(results) {
             $payloads.innerHTML = '';
-            if (results && results.length) {
-                $payloads.innerHTML += '========== BEST =========\n' + syntaxHighlight({
-                    match: Math.round(result.payloads.match * 100) + '%',
-                    guess: result.payloads.guess,
-                    matches: result.payloads.distinct
-                }) + '\n\n========== ALL =========\n';
-                for (var result of results) {
-                    $payloads.innerHTML += syntaxHighlight({
-                        sof: result.sof,
-                        eof: result.eof,
-                        words: result.words,
-                        match: Math.round(result.payloads.match * 100) + '%',
-                        guess: result.payloads.guess,
-                        matches: result.payloads.distinct
-                    }) + '\n';
+            if (results) {
+                var nr = 1;
+                for (var signalDef of results) {
+                    $payloads.innerHTML += nr++ + ': ' + format(signalDef) + '\n';
                 }
             }
+        }
+
+        function format(signalDef) {
+            return syntaxHighlight({
+                score: Math.round(signalDef.payloads.score),
+                match: Math.round(signalDef.payloads.match * 100) + '%',
+                payload: signalDef.payloads.guess,
+                sofl: signalDef.sof.length,
+                eofl: signalDef.eof.length,
+                length: signalDef.length,
+                matches: signalDef.payloads.distinct,
+                signal: {
+                    sof: signalDef.sof,
+                    eof: signalDef.eof,
+                    words: signalDef.words,
+                },
+            }) + '\n';
         }
 
     </script>
@@ -534,69 +686,84 @@
         <div class="section">
             <h3>Information</h3>
             <p>
-                Fill in the information below to estimate the settings for a <a href="https://developer.athom.com/docs/apps/tutorial-Signals-Creating%20a%20Signal.html" target="_blank">433 mhz Homey signal</a>.
-                The estimates are based on <a href="" target="_blank">these clculations</a>.
-                More information on how to create a <a href="https://github.com/athombv/node-homey-rfdriver" target="_blank">433mhz driver</a> can be found <a href="https://github.com/athombv/node-homey-rfdriver" target="_blank">here</a>.
+                Fill in the information below to estimate the settings for a <a href="https://developer.athom.com/docs/apps/tutorial-Signals-Creating%20a%20Signal.html" target="_blank">Homey rf signal</a> (433 or 868 Mhz).
+                The estimates are based on <a href="https://github.com/athombv/node-homey-433/wiki/How-to-record-a-signal" target="_blank">these calculations</a>.
+                More information how to create a <a href="https://github.com/athombv/node-homey-rfdriver" target="_blank">rf driver</a> can be found <a href="https://github.com/athombv/node-homey-rfdriver" target="_blank">here</a>.
             </p>
         </div>
 
         <div class="section">
             <h3>Connect to Homey</h3>
             <p>
-                To establish a connection and be able to record a signal from your Homey, we need the following connection settings.
-                Alternatively just paste a previous recording or grab a recording yoursef by calling the api: <strong>api('POST', '/manager/rf/record')</strong> from the Chrome console while logged-in.
+                We need the following connection settings to establish a connection and be able to record a signal from your Homey.
             </p>
             <div class="row">
                 <label>What's your Homey's ip-address?</label>
                 <input type="text" id="ip-address" placeholder="Homey ip-address" />
             </div>
             <div class="row">
-                <label>Paste your <strong>authorization bearer token</strong> to allow a connection to your Homey. Can be found by (1) opening the <a href="https://developer.athom.com/tools/signals" target="_blank">recording page</a>. (2) Open the Chrome dev-tools [f12] and go to the (3) 'network' tab. (4) Press the record button on the page and (5) find the network call. (6) Paste the token from the 'authorization Bearer' in the request header (grab token only).</label>
+                <label>Paste your <strong title="Can be found by (1) opening the recording page. (2) Open the Chrome dev-tools [f12] and go to the (3) 'network' tab. (4) Press the record button on the page and (5) find the network call. (6) Paste the token from the 'authorization Bearer' in the request header (grab token only).">authorization bearer token</strong> to allow a connection to your Homey.</label>
                 <input type="text" id="access-token" placeholder="access-token" />
             </div>
         </div>
         <div class="section">
             <h3>Recording</h3>
             <p>
-                Press 'start recording' or paste your recorded signal into the textarea below.
-                <div><strong>NOTE:</strong> The 'flat' signal from the <a href="https://developer.athom.com/tools/signals" target="_blank">recording page</a> <string>WONT</string> work...</div>
+                Press 'start recording' or paste your recorded signal into the textarea below. Generate the signal as many times as possible.
+                <div><strong>NOTE:</strong> The 'flat' signal from the <a href="https://developer.athom.com/tools/signals" target="_blank">recording page</a> <strong>doesn't</strong> work...</div>
             </p>
-            <p>When recording, generating the signal as many times as possible & count how many times the signal is send (i.e. count how often you press the button on your remote).</p>
             <div>
-                <input type="button" id="record-button" value="start recording" title="record" /><input type="button" id="calculate-button" value="calculate" title="calculate" />
+                <input type="button" id="record-button" value="start recording" title="record" />
+                <select id="frequency-button" value="433">
+                    <option value="433">433 Mhz</option>
+                    <option value="868">868 Mhz</option>
+                </select>
+                for
+                <input type="number" id="record-time" value="10" placeholder="1-60" min="1" max="60" step="1" pattern="\d*" /> sec.
+                <!--<input type="button" id="calculate-button" value="calculate" title="calculate" />-->
             </div>
             <textarea id="record-data" placeholder="signal recording data"></textarea>
         </div>
+        
         <div class="section">
-            <h3>Signal definition</h3>
-            <p>These values will be extracted from the signal, but can be overridden to gain better results.</p>
+            <h3>Prediction settings</h3>
             <div class="row">
-                <p>How many times did you send the signal (estimate)?</p>
-                <input type="text" id="predicted-signal-count" placeholder="predicted signal count" />
+                <p>Start of frame (sof) length</p>
+                <span>min: <input type="number" id="min-sofl" value="0" placeholder="0" min="0" max="100" step="1" pattern="\d*" /> max: <input type="number" id="max-sofl" value="4" placeholder="4" min="0" max="100" step="1" pattern="\d*" /></span>
             </div>
             <div class="row">
-                <p>What is the predicted start of frame (sof) length?</p>
-                <input type="text" id="sofl" placeholder="start of frame (sof)" />
+                <div class="row">
+                    <p>End of frame (eof) length</p>
+                    <span>min: <input type="number" id="min-eofl" value="0" placeholder="0" min="0" max="100" step="1" pattern="\d*" /> max: <input type="number" id="max-eofl" value="4" placeholder="4" min="0" max="100" step="1" pattern="\d*" /></span>
+                </div>
             </div>
             <div class="row">
-                <p>What is the predicted end of frame (eof) length?</p>
-                <input type="text" id="eofl" placeholder="end of frame (eof)" />
-            </div>
-            <div class="row">
-                <p>What is the predicted signal length (including sof & eof)?</p>
-                <input type="text" id="predicted-signal-length" placeholder="predicted total signal length" />
-            </div>
-            <div class="row">
-                <p>What is the predicted word length?</p>
-                <input type="text" id="predicted-word-length" placeholder="predicted total signal length" />
-            </div>
-            <div class="row">
-                <p>What are the predicted words (overrides predicted word length)?</p>
-                <input type="text" id="predicted-words" placeholder="[[n, ], ...]" />
+                <div class="row">
+                    <p>Words length</p>
+                    <span>min: <input type="number" id="min-word-length" value="2" placeholder="2" min="1" max="100" step="1" pattern="\d*" /> max: <input type="number" id="max-word-length" value="4" placeholder="4" min="1" max="100" step="1" pattern="\d*" /></span>
+                </div>
             </div>
             <div class="row">
                 <p>Tolerance</p>
-                <input type="text" id="tolerance" placeholder="100" />
+                <input type="number" id="tolerance" value="100" placeholder="100" min="0" step="10" pattern="\d*"/>
+            </div>
+            <div class="row">
+                <p>Max number of words (you should probably try to increase the tolerance if you need this)</p>
+                <input type="number" id="max-words" placeholder="auto detect" min="1" max="100" step="1" pattern="\d*" />
+            </div>
+
+            <p><strong>The values below are extracted from the signal automatically each time a new calculation or recording is executed. Tweak afterwards to gain alternative results.</strong></p>
+            <div class="row">
+                <p>How many times did you send the signal?</p>
+                <input type="number" id="predicted-signal-count" placeholder="predicted signal count" min="0" max="1000" step="1" pattern="\d*" />
+            </div>
+            <div class="row">
+                <p>What is the predicted signal length (including sof & eof)?</p>
+                <input type="number" id="predicted-signal-length" placeholder="predicted total signal length" min="1" max="1000" step="1" pattern="\d*"/>
+            </div>
+            <div class="row">
+                <p>What are the predicted words (overrides min & max word length)?</p>
+                <input type="text" id="predicted-words" placeholder="[[n, ], ...]" />
             </div>
         </div>
         <div class="section">
@@ -604,14 +771,16 @@
             <p>See console output for details & intermediate results.</p>
             <pre id="output"></pre>
         </div>
-
         <div class="section">
-            <h3>Predicted Payloads</h3>
+            <h3>Predictions</h3>
             <pre id="payloads"></pre>
         </div>
 
     </div>
+
+    <!--Start-->
     <script type="text/javascript">init();</script>
+
 </body>
 
 </html>
