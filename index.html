@@ -403,10 +403,10 @@
                                 var current = signalDef(recordData, sofl, eofl, predictedSignalCount, predictedSignalLength, predictedWordLength, predictedWords, tolerance, maxWords);
                                 if (current) {
                                     // analyze defenition
-                                    current.payloads = analyze(current);
+                                    current.predictions = analyze(current);
 
                                     // include in results?
-                                    if (current.payloads && current.payloads.match && current.payloads.score) {
+                                    if (current.predictions && current.predictions.match && current.predictions.score) {
                                         results.push(current);
                                     }
                                 }
@@ -422,7 +422,7 @@
                 }
 
                 // Order by score
-                results = results.sort((s1, s2) => s1.payloads.score < s2.payloads.score ? 1 : s1.payloads.score > s2.payloads.score ? -1 : 0);
+                results = results.sort((s1, s2) => s1.predictions.score < s2.predictions.score ? 1 : s1.predictions.score > s2.predictions.score ? -1 : 0);
 
                 // display
                 console.log(results);
@@ -435,8 +435,8 @@
 
                 // output
                 $output.innerHTML = '<strong>Signal: </strong>' + syntaxHighlight(results[0].signal)
-                    + '\n\n<strong>Payload: </strong>' + results[0].payloads.guess
-                    + '\n<strong>Match: </strong> &nbsp;' + Math.round(results[0].payloads.match * 100) + '%';
+                    + '\n\n<strong>Payload: </strong>' + results[0].predictions.guess
+                    + '\n<strong>Match: </strong> &nbsp;' + Math.round(results[0].predictions.match * 100) + '%';
                 $output.style.outline = '1px solid #ccc';
 
                 displayPayloads(results);
@@ -663,13 +663,13 @@
 
         function format(signalDef) {
             return syntaxHighlight({
-                score: Math.round(signalDef.payloads.score),
-                match: Math.round(signalDef.payloads.match * 100) + '%',
-                payload: signalDef.payloads.guess,
+                score: Math.round(signalDef.predictions.score),
+                match: Math.round(signalDef.predictions.match * 100) + '%',
+                payload: signalDef.predictions.guess,
                 sofl: signalDef.sof.length,
                 eofl: signalDef.eof.length,
                 length: signalDef.length,
-                matches: signalDef.payloads.distinct,
+                matches: signalDef.predictions.distinct,
                 signal: {
                     sof: signalDef.sof,
                     eof: signalDef.eof,
