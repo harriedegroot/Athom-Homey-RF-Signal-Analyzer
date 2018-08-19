@@ -435,8 +435,8 @@
 
                 // output
                 $output.innerHTML = '<strong>Signal: </strong>' + syntaxHighlight(results[0].signal)
-                    + '\n\n<strong>Output: </strong>' + results[0].payloads.guess
-                    + '\n<strong>Match: </strong> ' + Math.round(results[0].payloads.match * 100) + '%';
+                    + '\n\n<strong>Payload: </strong>' + results[0].payloads.guess
+                    + '\n<strong>Match: </strong> &nbsp;' + Math.round(results[0].payloads.match * 100) + '%';
                 $output.style.outline = '1px solid #ccc';
 
                 displayPayloads(results);
@@ -686,9 +686,9 @@
         <div class="section">
             <h3>Information</h3>
             <p>
-                Fill in the information below to estimate the settings for a <a href="https://developer.athom.com/docs/apps/tutorial-Signals-Creating%20a%20Signal.html" target="_blank">Homey rf signal</a> (433 or 868 Mhz).
+                Predict the settings for a <a href="https://developer.athom.com/docs/apps/tutorial-Signals-Creating%20a%20Signal.html" target="_blank">Homey rf signal</a> (433 or 868 Mhz).
                 The estimates are based on <a href="https://github.com/athombv/node-homey-433/wiki/How-to-record-a-signal" target="_blank">these calculations</a>.
-                More information how to create a <a href="https://github.com/athombv/node-homey-rfdriver" target="_blank">rf driver</a> can be found <a href="https://github.com/athombv/node-homey-rfdriver" target="_blank">here</a>.
+                More information on how to create the <a href="https://github.com/athombv/node-homey-rfdriver" target="_blank">rf driver</a> can be found <a href="https://github.com/athombv/node-homey-rfdriver" target="_blank">here</a>.
             </p>
         </div>
 
@@ -748,7 +748,7 @@
                 <input type="number" id="tolerance" value="100" placeholder="100" min="0" step="10" pattern="\d*"/>
             </div>
             <div class="row">
-                <p>Max number of words (you should probably try to increase the tolerance if you need this)</p>
+                <p>Max number of words (you should probably tweak the above settings if you need this)</p>
                 <input type="number" id="max-words" placeholder="auto detect" min="1" max="100" step="1" pattern="\d*" />
             </div>
 
