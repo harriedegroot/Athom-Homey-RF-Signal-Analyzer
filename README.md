@@ -1,4 +1,5 @@
 # Athom Homey RF Signal Analyzer
+[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=RFE6WKJ4VRB5U&lc=NL&item_name=Harrie%20de%20Groot&item_number=Athom%20Homey%20RF%20Signal%20Analyzer&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHosted)
 
 Automatically record & analyze rf signals.
 
