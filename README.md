@@ -3,7 +3,7 @@
 Automatically record & analyze rf signals.
 
 ## Information
-Predicts a [signal defenition](https://developer.athom.com/docs/apps/tutorial-Signals-Creating%20a%20Signal.html) based on this guide [how to record a signal](https://github.com/athombv/node-homey-433/wiki/How-to-record-a-signal).
+Predicts a [signal defenition](https://developer.athom.com/docs/apps/tutorial-Signals-Creating%20a%20Signal.html) based on this guide [how to record a signal](https://github.com/athombv/node-homey-433/wiki/How-to-record-a-signal).  
 The output can be used to create an `Athom Homey` [RF Driver](https://github.com/athombv/node-homey-rfdriver).
 
 ## See it in action
