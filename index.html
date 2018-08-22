@@ -397,18 +397,15 @@
                 for (var predictedWordLength = minWordLength; predictedWordLength <= maxWordLength; predictedWordLength++) {
                     for (var sofl = minSofl; sofl <= maxSofl; sofl++) {
                         for (var eofl = minEofl; eofl <= maxEofl; eofl++) {
-                            if (sofl == 0 || eofl == 0) {
+                            // predict signal defenition
+                            var current = signalDef(recordData, sofl, eofl, predictedSignalCount, predictedSignalLength, predictedWordLength, predictedWords, tolerance, maxWords);
+                            if (current) {
+                                // analyze defenition
+                                current.predictions = analyze(current);
 
-                                // predict signal defenition
-                                var current = signalDef(recordData, sofl, eofl, predictedSignalCount, predictedSignalLength, predictedWordLength, predictedWords, tolerance, maxWords);
-                                if (current) {
-                                    // analyze defenition
-                                    current.predictions = analyze(current);
-
-                                    // include in results?
-                                    if (current.predictions && current.predictions.match && current.predictions.score) {
-                                        results.push(current);
-                                    }
+                                // include in results?
+                                if (current.predictions && current.predictions.match && current.predictions.score) {
+                                    results.push(current);
                                 }
                             }
                         }
@@ -548,6 +545,10 @@
                         // add word if it does not match any of the previous detected words
                         if (!predictedWords.find(word => calcDist(part, word, tolerance) !== -1))
                             predictedWords.push(part);  // add part to predicted words
+
+                        // reached the max number of words?
+                        if (predictedWords.length == maxWords)
+                            break;
                     }
                 }
             }
