@@ -397,10 +397,10 @@
                 for (var predictedWordLength = minWordLength; predictedWordLength <= maxWordLength; predictedWordLength++) {
                     for (var sofl = minSofl; sofl <= maxSofl; sofl++) {
                         for (var eofl = minEofl; eofl <= maxEofl; eofl++) {
-                            // predict signal defenition
+                            // predict signal definition
                             var current = signalDef(recordData, sofl, eofl, predictedSignalCount, predictedSignalLength, predictedWordLength, predictedWords, tolerance, maxWords);
                             if (current) {
-                                // analyze defenition
+                                // analyze definition
                                 current.predictions = analyze(current);
 
                                 // include in results?
@@ -430,9 +430,12 @@
                 if (trigger != $predictedSignalLength) $predictedSignalLength.value = results[0].predictedSignalLength;
                 //if (trigger != $predictedWords) $predictedWords.value = JSON.stringify(result.predictedWords);
 
+                // calculate final signal definition
+                var refinedDef = getSignalDef(results);
+
                 // output
-                $output.innerHTML = '<strong>Signal: </strong>' + syntaxHighlight(results[0].signal)
-                    + '\n\n<strong>Payload: </strong>' + results[0].predictions.guess
+                $output.innerHTML = '<strong>Signal: </strong>' + syntaxHighlight(refinedDef.signal)
+                    + '\n\n<strong>Payload: </strong>' + refinedDef.predictions.guess
                     + '\n<strong>Match: </strong> &nbsp;' + Math.round(results[0].predictions.match * 100) + '%';
                 $output.style.outline = '1px solid #ccc';
 
@@ -482,7 +485,7 @@
             return dist;
         }
 
-        // Generate signal def based on: https://github.com/athombv/node-homey-433/wiki/How-to-record-a-signal#defining-the-eof-end-of-frame
+        // Generate signal def based on: https://github.com/athombv/node-homey-433/wiki/How-to-record-a-signal
         function signalDef(recordData, sofl = 1, eofl = 0, predictedSignalCount = 0, predictedSignalLength = 0, predictedWordLength = 2, predictedWords = null, tolerance = 100, maxWords = -1) {
 
             // filter noise & select most common signal
@@ -617,7 +620,7 @@
             return output;
         }
 
-        // parse signal payload (digital representation) using the provided signal defenition
+        // parse signal payload (digital representation) using the provided signal definition
         function parseSignal(signal, signalDef) {
             if (!Array.isArray(signal) || !signalDef || !signalDef.words || !signalDef.words.length)
                 return null;
@@ -644,6 +647,29 @@
             }
             return payload;
         }
+
+
+        // Refine the result by re-calcuting the signal def from matched lines only
+        function getSignalDef(results) {
+
+            var best = results[0];
+            if (!best || best.predictions.signalsMatch === 1)
+                return best;
+
+            // remove non-matched lines (remove outliers)
+            var filteredData = best.recordData.filter((line, idx) => line.length == best.predictedSignalLength && parseSignal(line, best).join('') === best.predictions.guess);
+
+            // re-calculate signal def from filtered data
+            var signal = signalDef(filteredData, best.sofl, best.eofl, best.predictedSignalCount, best.predictedSignalLength, best.predictedWordLength, best.predictedWords, best.tolerance, best.maxWords);
+
+            // re-analyze definition
+            if (signal) {
+                signal.predictions = analyze(signal);
+            }
+
+            return signal || best;
+        }
+
 
         function displayPayloads(results) {
             $payloads.innerHTML = '';
@@ -761,9 +787,10 @@
             </div>
         </div>
         <div class="section">
-            <h3>Predicted Signal (best match)</h3>
-            <p>See console output for details & intermediate results.</p>
+            <h3>Predicted Signal</h3>
+            <p>The <i>Signal</i> is calculated from the best match (see predictions below), by filtering non-matching signals from the record data.</p>
             <pre id="output"></pre>
+            <p><i>See console output for details & intermediate results.</i></p>
         </div>
         <div class="section">
             <h3>Predictions</h3>
