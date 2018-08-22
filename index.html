@@ -545,12 +545,9 @@
                         // grab next signal part
                         var part = predictedSignal.slice(i, i + predictedWordLength);
 
-                        // done if signal repeats, with a minimal of 2 predicted words
-                        if (predictedWords.length < 2 ? false : predictedWords.find(word => calcDist(part, word, tolerance) !== -1) !== undefined)
-                            break;
-
-                        // add part to predicted words
-                        predictedWords.push(part);
+                        // add word if it does not match any of the previous detected words
+                        if (!predictedWords.find(word => calcDist(part, word, tolerance) !== -1))
+                            predictedWords.push(part);  // add part to predicted words
                     }
                 }
             }
