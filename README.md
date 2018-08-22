@@ -12,7 +12,7 @@ The output can be used to create an Athom Homey [RF Driver](https://github.com/a
 ## Demo signals
 Try pasting these demo signals into the `signal recording data` field.
 
-##### From tutorial
+##### From guide
 ```javascript
 [[255, 400, 110, 1002, 1100, 111, 108, 1010, 102, 1004, 1089, 109, 1102, 112, 110, 1004, 230]]
 ```
