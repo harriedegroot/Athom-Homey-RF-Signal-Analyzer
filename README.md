@@ -4,7 +4,7 @@ Automatically record & analyze rf signals.
 
 ## Information
 Predicts a [signal defenition](https://developer.athom.com/docs/apps/tutorial-Signals-Creating%20a%20Signal.html) based on this guide [how to record a signal](https://github.com/athombv/node-homey-433/wiki/How-to-record-a-signal).  
-The output can be used to create an `Athom Homey` [RF Driver](https://github.com/athombv/node-homey-rfdriver).
+The output can be used to create an Athom Homey [RF Driver](https://github.com/athombv/node-homey-rfdriver).
 
 ## See it in action
 *Open in browser:* **[index.html](http://htmlpreview.github.io/?https://github.com/harriedegroot/Athom-Homey-RF-Signal-Analyzer/blob/master/index.html)**.
@@ -12,7 +12,7 @@ The output can be used to create an `Athom Homey` [RF Driver](https://github.com
 ## Demo signals
 Try pasting these demo signals into the `signal recording data` field.
 
-##### From tutorial
+##### From guide
 ```javascript
 [[255, 400, 110, 1002, 1100, 111, 108, 1010, 102, 1004, 1089, 109, 1102, 112, 110, 1004, 230]]
 ```
