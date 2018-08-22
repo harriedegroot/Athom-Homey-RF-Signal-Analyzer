@@ -613,8 +613,8 @@
                 output.match = .5 * (output.payloadMatch + output.signalsMatch);
                 output.score = (100 * output.payloadMatch)  // number of unknown parts
                     + (100 * output.signalsMatch)           // number of signal machtes
-                    + (signalDef.sof.length ? Math.max(0, 30 - 3*signalDef.sof.length) : 0)       // prefer signals with small sof (> 0)
-                    + (signalDef.eof.length ? Math.max(0, 30 - 3*signalDef.sof.length) : 0)       // prefer signals with small eof (> 0)
+                    + (signalDef.sof.length ? Math.max(0, 100 - 5 * signalDef.sof.length) : 0)       // prefer signals with small sof (> 0)
+                    + (signalDef.eof.length ? Math.max(0, 100 - 5 * signalDef.eof.length) : 0)       // prefer signals with small eof (> 0)
                     + Math.max(0, (200 - (20 * signalDef.words.length)))     // prefer less words
                     + Math.max(0, (200 - (20 * signalDef.words[0].length))); // prefer shorter words
             }
