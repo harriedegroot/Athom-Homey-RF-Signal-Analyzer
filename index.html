@@ -252,10 +252,15 @@
                 if (!$accessToken.value)
                     throw Error('No access-token provided');
 
+                var bearer = $accessToken.value;
+                if (bearer) {
+                    bearer = bearer.replace('authorization:', '').replace('Bearer', '').trim();
+                }
+
                 var xhttp = new XMLHttpRequest();
                 xhttp.open("POST", 'http://' + $ipAddress.value + '/api' + url, true);
                 xhttp.setRequestHeader("Content-type", "application/json;charset=UTF-8");
-                xhttp.setRequestHeader("Authorization", "Bearer " + $accessToken.value);
+                xhttp.setRequestHeader("Authorization", "Bearer " + bearer);
                 xhttp.onreadystatechange = function (e) {
                     if (callback && this.readyState == 4) {
                         if (this.status == 403) {
@@ -305,7 +310,10 @@
                 updateRecordingButton();
 
                 if (result) {
-                    var recordData = JSON.parse(result).result;
+                    var recordData = JSON.parse(result);
+                    if (typeof recordData === 'object' && recordData.result) {
+                        recordData = recordData.result;
+                    }
                     var recordStr = JSON.stringify(recordData);
                     $recordData.disabled = false;
                     $recordData.value = recordStr;
@@ -336,11 +344,19 @@
 
                 // parse recording data?
                 if (!recordData) {
-                    var recordInput = ($recordData.value || '').replace(/[^0-9,\[\]]/g, "");
-                    if (!recordInput)
-                        return;
+                    try {
+                        if (!$recordData.value)
+                            return;
 
-                    recordData = JSON.parse(recordInput);
+                        recordData = JSON.parse($recordData.value); // Homey v2
+                        
+                    } catch { // Homey v1.5
+                        var recordInput = ($recordData.value || '').replace(/[^0-9,\[\]]/g, "");
+                        if (!recordInput)
+                            return;
+
+                        recordData = JSON.parse(recordInput);
+                    }
                 }
 
                 if (!Array.isArray(recordData) || !recordData.length)
@@ -487,6 +503,11 @@
 
         // Generate signal def based on: https://github.com/athombv/node-homey-433/wiki/How-to-record-a-signal
         function signalDef(recordData, sofl = 1, eofl = 0, predictedSignalCount = 0, predictedSignalLength = 0, predictedWordLength = 2, predictedWords = null, tolerance = 100, maxWords = -1) {
+
+            // Homey v2.0 fix
+            if (recordData && recordData.length && typeof recordData[0] === 'object') {
+                recordData = recordData.map(entry => Object.keys(entry).reduce((data, key) => { data[parseInt(key)] = entry[key]; return data }, []));
+            }
 
             // filter noise & select most common signal
             var counts = recordData.reduce((lengths, recordEntry) => Object.assign(lengths, { [recordEntry.length]: (lengths[recordEntry.length] || 0) + 1 }), {});
