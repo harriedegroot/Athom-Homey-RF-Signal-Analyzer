@@ -26,5 +26,10 @@ Try pasting these demo signals into the `signal recording data` field.
 ## Final note ##
 The repository is available at: https://github.com/harriedegroot/Athom-Homey-RF-Signal-Analyzer
 
-[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=RFE6WKJ4VRB5U&lc=NL&item_name=Harrie%20de%20Groot&item_number=Athom%20Homey%20RF%20Signal%20Analyzer&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHosted) 
- Did this app help you create a working driver? Consider buying me a :beer:!
+Do you like this tool? Consider a donation to support development.
+ 
+[![Donate][pp-donate-image]][pp-donate-link]
+
+[pp-donate-link]: https://www.paypal.me/harriedegroot
+[pp-donate-image]: https://img.shields.io/badge/Donate-PayPal-green.svg
+
